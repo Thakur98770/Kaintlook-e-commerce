@@ -49,7 +49,7 @@ export default function Cart() {
                 />
                 <div style={{ flex: 1 }}>
                   <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{item.product.name}</h3>
-                  <span style={{ fontSize: 13, color: accent, fontWeight: 600 }}>₹{item.product.price}</span>
+                  <span style={{ fontSize: 13, color: "#000000", fontWeight: 600 }}>₹{item.product.price}</span>
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", border: "1px solid #E7E5DF", borderRadius: 6 }}>
