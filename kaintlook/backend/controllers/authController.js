@@ -25,7 +25,13 @@ async function issueOtp(user, purpose) {
   user.otpAttempts = 0;
   await user.save();
 
-  await sendOtpNotification(user, otp, purpose);
+  // Fire-and-forget: don't make the HTTP response wait on SMTP, which can hang
+  // for minutes on a slow/blocked connection (e.g. Gmail SMTP from Render).
+  // The OTP is already saved, so the client can proceed immediately; if the
+  // email itself fails or is slow, it's logged here instead of stalling the request.
+  sendOtpNotification(user, otp, purpose).catch((err) => {
+    console.error(`Failed to send ${purpose} OTP email to ${user.email}:`, err.message);
+  });
 }
 
 // @route POST /api/auth/register

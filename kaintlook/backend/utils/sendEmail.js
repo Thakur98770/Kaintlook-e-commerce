@@ -1,37 +1,56 @@
-const nodemailer = require("nodemailer");
+// Sends transactional emails via the Brevo HTTP API (https://api.brevo.com).
+// This uses plain HTTPS (port 443), unlike SMTP (port 587/465) which can hang
+// or time out on some hosts (e.g. Render's free tier blocking/throttling
+// outbound SMTP) — HTTP is fast and reliable there instead.
+//
+// Required env var: BREVO_API_KEY (Brevo dashboard -> Settings -> SMTP & API -> API Keys)
+// EMAIL_FROM can be either "Name <email@domain.com>" or just "email@domain.com".
+// The EMAIL_FROM address must be a verified sender in Brevo.
 
-// Uses standard SMTP env vars so this works with Gmail (with an app password),
-// SendGrid, Mailtrap, or any other SMTP provider — set EMAIL_HOST/PORT/USER/PASS.
-let transporter = null;
-function getTransporter() {
-  if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    return null; // email not configured — callers should treat this as "skip silently"
+function parseFrom(raw) {
+  const fallback = { email: process.env.EMAIL_USER || "no-reply@example.com", name: "KaintLook" };
+  if (!raw) return fallback;
+  const match = raw.match(/^(.*)<(.+)>$/);
+  if (match) {
+    return { name: match[1].trim().replace(/^"|"$/g, "") || fallback.name, email: match[2].trim() };
   }
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: Number(process.env.EMAIL_PORT) || 587,
-      secure: Number(process.env.EMAIL_PORT) === 465,
-      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-    });
-  }
-  return transporter;
+  return { email: raw.trim(), name: fallback.name };
 }
 
 async function sendEmail({ to, subject, html }) {
   try {
-    const t = getTransporter();
-    if (!t) {
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) {
       if (process.env.NODE_ENV !== "production") console.log(`[email skipped - not configured] To: ${to} | Subject: ${subject}`);
       return { sent: false, skipped: true };
     }
-    const result = await t.sendMail({
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-      to,
-      subject,
-      html,
+
+    const sender = parseFrom(process.env.EMAIL_FROM);
+
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "api-key": apiKey,
+      },
+      body: JSON.stringify({
+        sender,
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }),
     });
-    return { sent: true, messageId: result.messageId };
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const message = data?.message || `Brevo API error (status ${response.status})`;
+      console.error("Failed to send email:", message);
+      return { sent: false, error: message };
+    }
+
+    return { sent: true, messageId: data.messageId };
   } catch (err) {
     console.error("Failed to send email:", err.message);
     return { sent: false, error: err.message };
