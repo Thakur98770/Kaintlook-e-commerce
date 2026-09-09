@@ -25,8 +25,8 @@ export default function Users() {
     <div>
       <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, marginBottom: 20 }}>Users</h1>
 
-      <div style={{ background: "#fff", border: "1px solid #E7E5DF", borderRadius: 10, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      <div style={{ background: "#fff", border: "1px solid #E7E5DF", borderRadius: 10, overflow: "hidden", overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 480 }}>
           <thead>
             <tr style={{ textAlign: "left", background: "#FAF9F6", fontSize: 11.5, color: "#767676" }}>
               <th style={thStyle}>Name</th>

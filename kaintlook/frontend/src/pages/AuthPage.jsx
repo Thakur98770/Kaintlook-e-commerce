@@ -373,7 +373,10 @@ export default function AuthPage() {
 
               <label style={styles.termsLabel}>
                 <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} style={{ accentColor: "#7B2FF7" }} />
-                I agree to the Terms &amp; Conditions
+                                I agree to the{" "}
+                <Link to="/terms" target="_blank" rel="noopener noreferrer" className="kl-link" onClick={(e) => e.stopPropagation()}>
+                  Terms &amp; Conditions
+                </Link>
               </label>
 
               {error && <p style={styles.errorText}>{error}</p>}

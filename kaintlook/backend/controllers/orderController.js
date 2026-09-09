@@ -4,11 +4,106 @@ const Cart = require("../models/Cart");
 const Coupon = require("../models/Coupon");
 const Product = require("../models/Product");
 const Address = require("../models/Address");
-const { sendOrderNotification, sendReturnNotification } = require("../utils/emailNotifications");
+const { sendOrderNotification, sendAdminOrderNotification, sendReturnNotification } = require("../utils/emailNotifications");
+const { hasVariants } = require("../utils/variantHelpers");
 const FREE_DELIVERY_MINIMUM = 1999;
 const DELIVERY_CHARGE = 99;
 
-// @route POST /api/orders  { shippingAddress, couponCode, paymentMethod }
+const norm = (v) => (v || "").toString().trim();
+
+// How many units of this exact color+size (or, for a legacy product, the
+// product itself) are available right now. Always the source of truth —
+// never trust a stock number the client sends up.
+const availableStock = (product, colorName, size) => {
+  if (!hasVariants(product)) return product.stock ?? 0;
+  const variant = product.variants.find((v) => v.colorName === colorName);
+  const row = variant?.sizes.find((s) => s.size === size);
+  return row?.stock ?? 0;
+};
+
+const variantImage = (product, colorName) => {
+  if (hasVariants(product)) {
+    const variant = product.variants.find((v) => v.colorName === colorName);
+    if (variant?.images?.length) return variant.images[0];
+  }
+  return product.images?.[0] || "";
+};
+
+const variantSku = (product, colorName, size) => {
+  if (!hasVariants(product)) return "";
+  const variant = product.variants.find((v) => v.colorName === colorName);
+  const row = variant?.sizes.find((s) => s.size === size);
+  return row?.sku || "";
+};
+
+const variantColorCode = (product, colorName) => {
+  if (!hasVariants(product)) return "";
+  return product.variants.find((v) => v.colorName === colorName)?.colorCode || "";
+};
+
+// Atomically take `qty` units off a specific color+size (or the legacy
+// top-level stock). Only actually decrements if enough stock is still there
+// at the moment of the write — returns null if not (caller treats that as
+// "no longer available", exactly like the pre-variant code already did.
+async function decrementStock(productId, colorName, size, qty) {
+  if (norm(colorName) && norm(size)) {
+    return Product.findOneAndUpdate(
+      {
+        _id: productId,
+        variants: { $elemMatch: { colorName, sizes: { $elemMatch: { size, stock: { $gte: qty } } } } },
+      },
+      { $inc: { "variants.$[v].sizes.$[s].stock": -qty } },
+      { arrayFilters: [{ "v.colorName": colorName }, { "s.size": size }], new: true }
+    );
+  }
+  return Product.findOneAndUpdate({ _id: productId, stock: { $gte: qty } }, { $inc: { stock: -qty } }, { new: true });
+}
+
+// Reverses decrementStock — used for rollbacks and order cancellations.
+async function incrementStock(productId, colorName, size, qty) {
+  if (norm(colorName) && norm(size)) {
+    await Product.updateOne(
+      { _id: productId, "variants.colorName": colorName, "variants.sizes.size": size },
+      { $inc: { "variants.$[v].sizes.$[s].stock": qty } },
+      { arrayFilters: [{ "v.colorName": colorName }, { "s.size": size }] }
+    );
+  } else {
+    await Product.updateOne({ _id: productId }, { $inc: { stock: qty } });
+  }
+}
+
+// Normalises either the user's Cart, or a single "Buy Now" item, into the
+// same shape so the rest of placeOrder doesn't need to know which one it's
+// dealing with: [{ product (full doc), variantColorName, size, quantity }]
+async function resolveSourceItems(req) {
+  if (req.body.buyNow) {
+    const { productId, variantColorName, size, quantity = 1 } = req.body.buyNow;
+    if (!mongoose.isValidObjectId(productId)) throw Object.assign(new Error("Invalid product"), { status: 400 });
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 1000) {
+      throw Object.assign(new Error("Quantity must be a whole number between 1 and 1000"), { status: 400 });
+    }
+    const product = await Product.findById(productId);
+    if (!product) throw Object.assign(new Error("Product not found"), { status: 404 });
+    return { items: [{ product, variantColorName: norm(variantColorName), size: norm(size), quantity }], cart: null };
+  }
+
+  const cart = await Cart.findOne({ user: req.user._id }).populate("items.product");
+  if (!cart || cart.items.length === 0) {
+    throw Object.assign(new Error("Cart is empty"), { status: 400 });
+  }
+  const items = cart.items.map((i) => ({
+    product: i.product,
+    variantColorName: norm(i.variantColorName),
+    size: norm(i.size),
+    quantity: i.quantity,
+  }));
+  return { items, cart };
+}
+
+// @route POST /api/orders  { addressId, couponCode, paymentMethod, buyNow? }
+// buyNow (optional): { productId, variantColorName, size, quantity } — when
+// present, this single item is purchased directly and the user's Cart is
+// left completely untouched.
 const placeOrder = async (req, res) => {
   let claimedCart;
   try {
@@ -18,55 +113,62 @@ const placeOrder = async (req, res) => {
     if (!req.body.addressId) return res.status(400).json({ message: "A saved shipping address is required" });
     const address = await Address.findOne({ _id: req.body.addressId, user: req.user._id }).lean();
     if (!address) return res.status(400).json({ message: "Shipping address not found" });
-    let cart = await Cart.findOne({ user: req.user._id }).populate("items.product");
-    if (!cart || cart.items.length === 0) {
-      return res.status(400).json({ message: "Cart is empty" });
-    }
 
-    const insufficient = cart.items.filter((i) => !i.product || i.product.stock < i.quantity);
+    const { items: sourceItems, cart } = await resolveSourceItems(req);
+
+    // Validate every line has a real product and enough stock for its exact
+    // color+size before touching anything.
+    const insufficient = sourceItems.filter((i) => !i.product || availableStock(i.product, i.variantColorName, i.size) < i.quantity);
     if (insufficient.length > 0) {
       return res.status(400).json({
-        message: "Some items in your cart don't have enough stock",
+        message: "Some items don't have enough stock",
         items: insufficient.map((i) => ({
           product: i.product?._id,
           name: i.product?.name || "Unknown product",
-          available: i.product?.stock ?? 0,
+          variantColorName: i.variantColorName,
+          size: i.size,
+          available: i.product ? availableStock(i.product, i.variantColorName, i.size) : 0,
           requested: i.quantity,
         })),
       });
     }
 
-    claimedCart = await Cart.findOneAndUpdate(
-      { _id: cart._id, $or: [{ checkoutLockUntil: null }, { checkoutLockUntil: { $lt: new Date() } }] },
-      { checkoutLockUntil: new Date(Date.now() + 5 * 60 * 1000) },
-      { new: true }
-    ).populate("items.product");
-    if (!claimedCart) return res.status(409).json({ message: "Checkout already in progress. Please try again." });
-    cart = claimedCart;
-
-    const decremented = [];
-    for (const i of cart.items) {
-      const updated = await Product.findOneAndUpdate(
-        { _id: i.product._id, stock: { $gte: i.quantity } },
-        { $inc: { stock: -i.quantity } },
+    // Only cart-based checkouts need the short "in progress" lock — a Buy Now
+    // purchase doesn't touch the shared Cart document, so there's nothing to lock.
+    if (cart) {
+      claimedCart = await Cart.findOneAndUpdate(
+        { _id: cart._id, $or: [{ checkoutLockUntil: null }, { checkoutLockUntil: { $lt: new Date() } }] },
+        { checkoutLockUntil: new Date(Date.now() + 5 * 60 * 1000) },
         { new: true }
       );
-      if (!updated) {
-        await Promise.all(
-          decremented.map((d) => Product.updateOne({ _id: d.product }, { $inc: { stock: d.quantity } }))
-        );
-        return res.status(400).json({
-          message: `"${i.product.name}" no longer has enough stock`,
-        });
-      }
-      decremented.push({ product: i.product._id, quantity: i.quantity });
+      if (!claimedCart) return res.status(409).json({ message: "Checkout already in progress. Please try again." });
     }
 
-    const items = cart.items.map((i) => ({
+    const decremented = [];
+    for (const i of sourceItems) {
+      const updated = await decrementStock(i.product._id, i.variantColorName, i.size, i.quantity);
+      if (!updated) {
+        await Promise.all(decremented.map((d) => incrementStock(d.product, d.variantColorName, d.size, d.quantity)));
+        const variantLabel = [i.variantColorName, i.size].filter(Boolean).join(" / ");
+        return res.status(409).json({
+          message: variantLabel
+            ? `Sorry, "${i.product.name}" (${variantLabel}) is no longer available. Please select another size/color.`
+            : `"${i.product.name}" no longer has enough stock`,
+        });
+      }
+      decremented.push({ product: i.product._id, variantColorName: i.variantColorName, size: i.size, quantity: i.quantity });
+    }
+
+    const items = sourceItems.map((i) => ({
       product: i.product._id,
       name: i.product.name,
       price: i.product.price,
       quantity: i.quantity,
+      variantColorName: i.variantColorName,
+      variantColorCode: variantColorCode(i.product, i.variantColorName),
+      size: i.size,
+      image: variantImage(i.product, i.variantColorName),
+      sku: variantSku(i.product, i.variantColorName, i.size),
     }));
 
     const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
@@ -104,24 +206,28 @@ const placeOrder = async (req, res) => {
         trackingHistory: [{ status: "pending", note: `Order placed (${paymentMethod.toUpperCase()})` }],
       });
     } catch (err) {
-      await Promise.all(
-        decremented.map((d) => Product.updateOne({ _id: d.product }, { $inc: { stock: d.quantity } }))
-      );
+      await Promise.all(decremented.map((d) => incrementStock(d.product, d.variantColorName, d.size, d.quantity)));
       throw err;
     }
 
-    cart.items = [];
-    cart.checkoutLockUntil = null;
-    await cart.save();
+    if (cart) {
+      cart.items = [];
+      cart.checkoutLockUntil = null;
+      await cart.save();
+    }
 
     sendOrderNotification(req.user, order, "placed");
+    // Fire-and-forget, same pattern as customer emails — never blocks the response.
+    sendAdminOrderNotification(order, req.user).catch((err) => {
+      console.error(`Failed to send admin order notification for order ${order._id}:`, err.message);
+    });
 
     res.status(201).json(order);
   } catch (err) {
     if (claimedCart) {
       await Cart.updateOne({ _id: claimedCart._id }, { checkoutLockUntil: null }).catch(() => {});
     }
-    res.status(400).json({ message: "Failed to place order", error: err.message });
+    res.status(err.status || 400).json({ message: err.message || "Failed to place order" });
   }
 };
 
@@ -177,7 +283,7 @@ const getAllOrders = async (req, res) => {
 // Returns items to stock — used whenever an order transitions into "cancelled".
 const restockOrderItems = async (order) => {
   await Promise.all(
-    order.items.map((i) => Product.updateOne({ _id: i.product }, { $inc: { stock: i.quantity } }))
+    order.items.map((i) => incrementStock(i.product, i.variantColorName, i.size, i.quantity))
   );
 };
 
@@ -270,7 +376,7 @@ const requestReturn = async (req, res) => {
 
     res.json(order);
   } catch (err) {
-    res.status(400).json({ message: "Failed to request return", error: err.message });
+    res.status(400).json({ message: "Failed to request return" });
   }
 };
 

@@ -1,11 +1,24 @@
-// FILE PATH: kaintlook-auth/frontend/src/pages/Cart.jsx
-// Replace the existing file at this path with the contents below.
-
 import React, { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { getCart, updateCartItem, removeFromCart } from "../api/shop";
 
 const accent = "#2575FC";
+
+// Same helper logic as the backend's variantHelpers.js — kept in sync so the
+// cart never disagrees with the server about what's in stock.
+const findVariant = (product, colorName) => (product?.variants || []).find((v) => v.colorName === colorName);
+const findSizeRow = (variant, size) => (variant?.sizes || []).find((s) => s.size === size);
+const availableStock = (item) => {
+  const hasVariants = Array.isArray(item.product?.variants) && item.product.variants.length > 0;
+  if (!hasVariants) return item.product?.stock ?? 0;
+  const row = findSizeRow(findVariant(item.product, item.variantColorName), item.size);
+  return row?.stock ?? 0;
+};
+const lineImage = (item) => {
+  const variant = findVariant(item.product, item.variantColorName);
+  return variant?.images?.[0] || item.product?.images?.[0] || `https://picsum.photos/seed/${item.product?._id}/120/120`;
+};
+const lineKey = (item) => `${item.product._id}::${item.variantColorName || ""}::${item.size || ""}`;
 
 export default function Cart() {
   const navigate = useNavigate();
@@ -17,12 +30,14 @@ export default function Cart() {
 
   useEffect(() => { load(); }, []);
 
-  const changeQty = async (productId, quantity) => {
-    try { setCart(await updateCartItem(productId, quantity)); } catch (err) { setError(err.message); }
+  const changeQty = async (item, quantity) => {
+    try { setCart(await updateCartItem(item.product._id, quantity, item.variantColorName, item.size)); }
+    catch (err) { setError(err.message); }
   };
 
-  const remove = async (productId) => {
-    try { setCart(await removeFromCart(productId)); } catch (err) { setError(err.message); }
+  const remove = async (item) => {
+    try { setCart(await removeFromCart(item.product._id, item.variantColorName, item.size)); }
+    catch (err) { setError(err.message); }
   };
 
   if (loading) return <div style={{ padding: 40 }}>Loading…</div>;
@@ -40,34 +55,54 @@ export default function Cart() {
       ) : (
         <>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {items.map((item) => (
-              <div key={item.product._id} style={{ display: "flex", gap: 16, alignItems: "center", borderBottom: "1px solid #E7E5DF", paddingBottom: 16 }}>
-                <img
-                  src={item.product.images?.[0] || `https://picsum.photos/seed/${item.product._id}/120/120`}
-                  alt={item.product.name}
-                  style={{ width: 76, height: 76, objectFit: "cover", borderRadius: 8 }}
-                />
-                <div style={{ flex: 1 }}>
+            {items.map((item) => {
+              const stock = availableStock(item);
+              const atMax = item.quantity >= stock;
+              return (
+                <div key={lineKey(item)} style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", borderBottom: "1px solid #E7E5DF", paddingBottom: 16 }}>
+                  <img
+                    src={lineImage(item)}
+                    alt={item.product.name}
+                    style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, flexShrink: 0 }}
+                  />
+                  <div style={{ flex: "1 1 150px", minWidth: 140 }}>
                   <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{item.product.name}</h3>
+                  {(item.variantColorName || item.size) && (
+                    <p style={{ fontSize: 12, color: "#767676", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 6 }}>
+                      {item.variantColorName && (
+                        <>
+                          <span style={{ display: "inline-block", width: 11, height: 11, borderRadius: "50%", background: findVariant(item.product, item.variantColorName)?.colorCode || "#ccc", border: "1px solid #E7E5DF" }} />
+                          {item.variantColorName}
+                        </>
+                      )}
+                      {item.variantColorName && item.size && " · "}
+                      {item.size && `Size: ${item.size}`}
+                    </p>
+                  )}
                   <span style={{ fontSize: 13, color: "#000000", fontWeight: 600 }}>₹{item.product.price}</span>
+                    {stock <= 5 && stock > 0 && <span style={{ display: "block", fontSize: 11.5, color: "#B8860B", marginTop: 2 }}>Only {stock} left</span>}
+                    {stock === 0 && <span style={{ display: "block", fontSize: 11.5, color: "#B03434", marginTop: 2 }}>Out of stock</span>}
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", border: "1px solid #E7E5DF", borderRadius: 6 }}>
+                      <button onClick={() => changeQty(item, item.quantity - 1)} style={qtyBtnStyle}>−</button>
+                      <span style={{ padding: "0 14px", fontSize: 14 }}>{item.quantity}</span>
+                      <button onClick={() => changeQty(item, item.quantity + 1)} disabled={atMax} style={{ ...qtyBtnStyle, opacity: atMax ? 0.35 : 1, cursor: atMax ? "not-allowed" : "pointer" }}>+</button>
+                    </div>
+
+                    <span style={{ fontSize: 14, fontWeight: 600, minWidth: 60, textAlign: "right" }}>
+                      ₹{item.product.price * item.quantity}
+                    </span>
+
+                    <button onClick={() => remove(item)} style={removeBtnStyle}>Remove</button>
+                  </div>
                 </div>
-
-                <div style={{ display: "flex", alignItems: "center", border: "1px solid #E7E5DF", borderRadius: 6 }}>
-                  <button onClick={() => changeQty(item.product._id, item.quantity - 1)} style={qtyBtnStyle}>−</button>
-                  <span style={{ padding: "0 14px", fontSize: 14 }}>{item.quantity}</span>
-                  <button onClick={() => changeQty(item.product._id, item.quantity + 1)} style={qtyBtnStyle}>+</button>
-                </div>
-
-                <span style={{ fontSize: 14, fontWeight: 600, minWidth: 70, textAlign: "right" }}>
-                  ₹{item.product.price * item.quantity}
-                </span>
-
-                <button onClick={() => remove(item.product._id)} style={removeBtnStyle}>Remove</button>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          <div style={{ marginTop: 26, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ marginTop: 26, display: "flex", flexWrap: "wrap", gap: 14, justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 16, fontWeight: 700 }}>Subtotal: ₹{subtotal}</span>
             <button onClick={() => navigate("/checkout")} style={checkoutBtnStyle}>Proceed to Checkout</button>
           </div>

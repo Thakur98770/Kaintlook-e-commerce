@@ -37,3 +37,6 @@ export const adminGetSummary = () => apiRequest("/analytics/summary");
 export const adminGetSales = (days = 30) => apiRequest(`/analytics/sales?days=${days}`);
 export const adminGetTopProducts = (limit = 5) => apiRequest(`/analytics/top-products?limit=${limit}`);
 export const adminGetEmailNotifications = (page = 1) => apiRequest(`/notifications/emails?page=${page}`);
+
+// Back-in-stock waitlist — ?status=active|notified|cancelled
+export const adminGetStockNotifications = (status = "") => apiRequest(`/stock-notifications${status ? `?status=${status}` : ""}`);

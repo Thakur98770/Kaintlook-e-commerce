@@ -1,6 +1,3 @@
-// FILE PATH: kaintlook-auth/frontend/src/pages/Invoice.jsx
-// Replace the existing file at this path with the contents below.
-
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getOrder } from "../api/shop";
@@ -26,13 +23,18 @@ export default function Invoice() {
           .no-print { display: none !important; }
           body { margin: 0; }
         }
+        @media (max-width: 480px) {
+          .kl-invoice-header { flex-wrap: wrap; gap: 16px; }
+          .kl-invoice-header > div:last-child { text-align: left !important; }
+          .kl-invoice-meta { grid-template-columns: 1fr !important; }
+        }
       `}</style>
 
       <button onClick={() => window.print()} className="no-print" style={printBtnStyle}>
         Download / Print Invoice
       </button>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 30, borderBottom: "2px solid #1B1B1B", paddingBottom: 20 }}>
+      <div className="kl-invoice-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 30, borderBottom: "2px solid #1B1B1B", paddingBottom: 20 }}>
         <div>
           <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700, margin: 0 }}>
             Kaint<span style={{ color: accent }}>Look</span>
@@ -48,7 +50,7 @@ export default function Invoice() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 30, fontSize: 13 }}>
+      <div className="kl-invoice-meta" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 30, fontSize: 13 }}>
         <div>
           <h3 style={{ fontSize: 12, textTransform: "uppercase", color: "#767676", marginBottom: 6 }}>Billed To</h3>
           <p style={{ margin: 0, lineHeight: 1.6 }}>
@@ -80,7 +82,14 @@ export default function Invoice() {
         <tbody>
           {order.items.map((it, i) => (
             <tr key={i} style={{ borderBottom: "1px solid #E7E5DF" }}>
-              <td style={{ padding: "8px 0" }}>{it.name}</td>
+              <td style={{ padding: "8px 0" }}>
+                {it.name}
+                {(it.variantColorName || it.size) && (
+                  <div style={{ fontSize: 11, color: "#767676", marginTop: 2 }}>
+                    {[it.variantColorName, it.size && `Size: ${it.size}`].filter(Boolean).join(" · ")}
+                  </div>
+                )}
+              </td>
               <td style={{ padding: "8px 0", textAlign: "center" }}>{it.quantity}</td>
               <td style={{ padding: "8px 0", textAlign: "right" }}>₹{it.price}</td>
               <td style={{ padding: "8px 0", textAlign: "right" }}>₹{it.price * it.quantity}</td>

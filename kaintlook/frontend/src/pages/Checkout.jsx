@@ -1,14 +1,14 @@
-// FILE PATH: kaintlook-auth/frontend/src/pages/Checkout.jsx
-// Replace the existing file at this path with the contents below.
-
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { getCart, getAddresses, addAddress, validateCoupon, placeOrder } from "../api/shop";
 
 const accent = "#2575FC";
 
 export default function Checkout() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const buyNow = location.state?.buyNow || null;
+
   const [cart, setCart] = useState(null);
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
@@ -21,16 +21,43 @@ export default function Checkout() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    getCart().then(setCart).catch((err) => setError(err.message));
+    // Buy Now bypasses the cart entirely — nothing to fetch, we already have
+    // everything we need from the product page via router state.
+    if (!buyNow) {
+      getCart().then(setCart).catch((err) => setError(err.message));
+    }
     getAddresses().then((list) => {
       setAddresses(list);
       const def = list.find((a) => a.isDefault) || list[0];
       if (def) setSelectedAddress(def._id);
     }).catch((err) => setError(err.message));
-  }, []);
+  }, [buyNow]);
 
-  const items = cart?.items || [];
-  const subtotal = items.reduce((sum, i) => sum + (i.product?.price || 0) * i.quantity, 0);
+  // Normalise both checkout paths (cart vs. buy-now) into the same shape for
+  // display: [{ key, name, image, price, quantity, variantColorName, colorCode, size }]
+  const items = buyNow
+    ? [{
+        key: "buy-now",
+        name: buyNow.product.name,
+        image: (buyNow.variantColorName && buyNow.product.variants?.find((v) => v.colorName === buyNow.variantColorName)?.images?.[0]) || buyNow.product.images?.[0],
+        price: buyNow.product.variants?.find((v) => v.colorName === buyNow.variantColorName)?.sizes?.find((s) => s.size === buyNow.size)?.price ?? buyNow.product.price,
+        quantity: buyNow.quantity,
+        variantColorName: buyNow.variantColorName,
+        colorCode: buyNow.colorCode,
+        size: buyNow.size,
+      }]
+    : (cart?.items || []).filter((i) => i.product).map((i) => ({
+        key: `${i.product._id}::${i.variantColorName || ""}::${i.size || ""}`,
+        name: i.product.name,
+        image: (i.variantColorName && i.product.variants?.find((v) => v.colorName === i.variantColorName)?.images?.[0]) || i.product.images?.[0],
+        price: i.product.price,
+        quantity: i.quantity,
+        variantColorName: i.variantColorName,
+        colorCode: i.product.variants?.find((v) => v.colorName === i.variantColorName)?.colorCode || "",
+        size: i.size,
+      }));
+
+  const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const deliveryCharge = subtotal - discount >= 1999 ? 0 : 99;
   const total = subtotal - discount + deliveryCharge;
 
@@ -62,7 +89,11 @@ export default function Checkout() {
 
     setPlacing(true);
     try {
-      const order = await placeOrder(address._id, couponCode ? couponCode : undefined);
+      const order = await placeOrder(
+        address._id,
+        couponCode ? couponCode : undefined,
+        buyNow ? { productId: buyNow.productId, variantColorName: buyNow.variantColorName, size: buyNow.size, quantity: buyNow.quantity } : null
+      );
       navigate(`/orders/${order._id}`);
     } catch (err) {
       setError(err.message);
@@ -74,6 +105,30 @@ export default function Checkout() {
   return (
     <div style={{ maxWidth: 700, margin: "0 auto", padding: "30px 20px", fontFamily: "'Work Sans', sans-serif" }}>
       <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 700, marginBottom: 24 }}>Checkout</h1>
+
+      {/* Order items */}
+      <section style={{ marginBottom: 30 }}>
+        <h2 style={sectionTitle}>Order Summary</h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {items.map((i) => (
+            <div key={i.key} style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", border: "1px solid #E7E5DF", borderRadius: 8, padding: 12 }}>
+              <img src={i.image || "https://picsum.photos/seed/order/80/80"} alt={i.name} style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} />
+              <div style={{ flex: "1 1 150px", minWidth: 120 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{i.name}</div>
+                {(i.variantColorName || i.size) && (
+                  <div style={{ fontSize: 12, color: "#767676", marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
+                    {i.variantColorName && <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: i.colorCode || "#ccc", border: "1px solid #E7E5DF" }} />}
+                    {[i.variantColorName, i.size && `Size: ${i.size}`].filter(Boolean).join(" · ")}
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize: 13, color: "#767676" }}>Qty: {i.quantity}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, minWidth: 70, textAlign: "right" }}>₹{i.price * i.quantity}</div>
+            </div>
+          ))}
+          {items.length === 0 && <p style={{ fontSize: 13, color: "#767676" }}>Your cart is empty.</p>}
+        </div>
+      </section>
 
       {/* Address */}
       <section style={{ marginBottom: 30 }}>

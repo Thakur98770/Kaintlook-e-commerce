@@ -1,15 +1,18 @@
 const Product = require("../models/Product");
 const mongoose = require("mongoose");
-const productFields = ["name", "code", "description", "category", "subcategory", "price", "unit", "stock", "images", "tag"];
+const { validateVariants } = require("../utils/variantHelpers");
+const { checkAndNotifyRestock } = require("../utils/restockNotifier");
+
+const productFields = ["name", "code", "description", "category", "subcategory", "price", "unit", "stock", "images", "tag", "variants", "lowStockThreshold"];
 const pickProduct = (body) => Object.fromEntries(productFields.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
 
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // @route GET /api/products
-// Supports ?category=&search=&sort=low|high|az&minPrice=&maxPrice=&minRating=&page=&limit=
+// Supports ?category=&search=&sort=low|high|az&minPrice=&maxPrice=&minRating=&color=&size=&page=&limit=
 const getProducts = async (req, res) => {
   try {
-    const { category, subcategory, tag, search, sort, minPrice, maxPrice, minRating, page = 1, limit = 20 } = req.query;
+    const { category, subcategory, tag, search, sort, minPrice, maxPrice, minRating, color, size, page = 1, limit = 20 } = req.query;
 
     const filter = {};
     if (category && category !== "All") filter.category = category;
@@ -22,6 +25,11 @@ const getProducts = async (req, res) => {
       if (maxPrice) filter.price.$lte = Number(maxPrice);
     }
     if (minRating) filter.rating = { $gte: Number(minRating) };
+
+    // Dynamic variant filters — never a hard-coded color/size list, this just
+    // matches whatever colors/sizes admins have actually entered on products.
+    if (color) filter["variants.colorName"] = color;
+    if (size) filter["variants.sizes.size"] = size;
 
     let query = Product.find(filter);
 
@@ -51,14 +59,40 @@ const getProducts = async (req, res) => {
   }
 };
 
+// @route GET /api/products/filters
+// Dynamic facets for the shop's color/size filter UI — pulled straight from
+// whatever products actually exist, never a fixed frontend-side list.
+const getProductFilters = async (req, res) => {
+  try {
+    const [colors, sizes] = await Promise.all([
+      Product.aggregate([
+        { $unwind: "$variants" },
+        { $group: { _id: { name: "$variants.colorName", code: "$variants.colorCode" } } },
+        { $project: { _id: 0, name: "$_id.name", code: "$_id.code" } },
+        { $sort: { name: 1 } },
+      ]),
+      Product.aggregate([
+        { $unwind: "$variants" },
+        { $unwind: "$variants.sizes" },
+        { $group: { _id: "$variants.sizes.size" } },
+        { $sort: { _id: 1 } },
+      ]),
+    ]);
+    res.json({ colors, sizes: sizes.map((s) => s._id) });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch filters", error: err.message });
+  }
+};
+
 // @route GET /api/products/suggest?q=
-// Lightweight autocomplete — partial name matches, capped small for a dropdown.
+// Lightweight autocomplete — partial name (and color) matches, capped small for a dropdown.
 const getProductSuggestions = async (req, res) => {
   try {
     const q = (req.query.q || "").trim();
     if (!q) return res.json([]);
 
-    const products = await Product.find({ name: { $regex: escapeRegex(q), $options: "i" } })
+    const regex = { $regex: escapeRegex(q), $options: "i" };
+    const products = await Product.find({ $or: [{ name: regex }, { "variants.colorName": regex }] })
       .select("name category price images")
       .limit(6);
 
@@ -83,10 +117,11 @@ const getProductById = async (req, res) => {
 // @route POST /api/products (admin only)
 const createProduct = async (req, res) => {
   try {
+    validateVariants(req.body.variants);
     const product = await Product.create(pickProduct(req.body));
     res.status(201).json(product);
   } catch (err) {
-    res.status(400).json({ message: "Failed to create product", error: err.message });
+    res.status(400).json({ message: err.message || "Failed to create product" });
   }
 };
 
@@ -94,11 +129,22 @@ const createProduct = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid product" });
+    validateVariants(req.body.variants);
+
+    // Snapshot before the update so we can detect 0 -> positive stock
+    // transitions afterwards and trigger back-in-stock emails.
+    const before = await Product.findById(req.params.id).lean();
+    if (!before) return res.status(404).json({ message: "Product not found" });
+
     const product = await Product.findByIdAndUpdate(req.params.id, pickProduct(req.body), { new: true, runValidators: true });
     if (!product) return res.status(404).json({ message: "Product not found" });
+
+    // Fire-and-forget — never let a notification hiccup fail the admin's save.
+    checkAndNotifyRestock(before, product).catch((err) => console.error("Restock notification error:", err.message));
+
     res.json(product);
   } catch (err) {
-    res.status(400).json({ message: "Failed to update product", error: err.message });
+    res.status(400).json({ message: err.message || "Failed to update product" });
   }
 };
 
@@ -115,6 +161,7 @@ const deleteProduct = async (req, res) => {
 
 module.exports = {
   getProducts,
+  getProductFilters,
   getProductSuggestions,
   getProductById,
   createProduct,

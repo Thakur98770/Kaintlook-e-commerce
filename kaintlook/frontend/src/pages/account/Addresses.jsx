@@ -1,6 +1,3 @@
-// FILE PATH: kaintlook-auth/frontend/src/pages/account/Addresses.jsx
-// Replace the existing file at this path with the contents below.
-
 import React, { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { getAddresses, addAddress, updateAddress, deleteAddress } from "../../api/shop";
@@ -48,7 +45,8 @@ export default function Addresses() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} style={{ border: "1px solid #E7E5DF", borderRadius: 10, padding: 18, marginBottom: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <form onSubmit={handleSubmit} className="kl-address-form" style={{ border: "1px solid #E7E5DF", borderRadius: 10, padding: 18, marginBottom: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <style>{`@media (max-width: 480px) { .kl-address-form { grid-template-columns: 1fr !important; } }`}</style>
           {["fullName", "line1", "line2", "city", "state", "pincode", "phone"].map((field) => (
             <input
               key={field}

@@ -3,12 +3,16 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
+import Analytics from "./components/Analytics";
 
 import Home from "./pages/Home";
 import NotFound from "./pages/NotFound";
 const Shop = lazy(() => import("./pages/Shop"));
 const AuthPage = lazy(() => import("./pages/AuthPage"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const TermsAndConditions = lazy(() => import("./pages/TermsAndConditions"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const RefundPolicy = lazy(() => import("./pages/RefundPolicy"));
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
 const Cart = lazy(() => import("./pages/Cart"));
 const Checkout = lazy(() => import("./pages/Checkout"));
@@ -29,12 +33,14 @@ const AdminOrders = lazy(() => import("./pages/admin/Orders"));
 const AdminCategories = lazy(() => import("./pages/admin/Categories"));
 const AdminUsers = lazy(() => import("./pages/admin/Users"));
 const AdminNotifications = lazy(() => import("./pages/admin/Notifications"));
+const AdminStockNotifications = lazy(() => import("./pages/admin/StockNotifications"));
 const CategoryPage = lazy(() => import("./pages/CategoryPage"));
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <Analytics />
         <Suspense fallback={<div style={{ minHeight: "100vh", padding: 40, color: "#767676" }}>Loading…</div>}>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -43,6 +49,9 @@ export default function App() {
           <Route path="/login" element={<AuthPage />} />
           <Route path="/register" element={<AuthPage />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/terms" element={<TermsAndConditions />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/refund-policy" element={<RefundPolicy />} />
           <Route path="/products/:id" element={<ProductDetail />} />
           <Route path="/cart" element={<Cart />} />
 
@@ -104,6 +113,7 @@ export default function App() {
             <Route path="categories" element={<AdminCategories />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="notifications" element={<AdminNotifications />} />
+            <Route path="stock-notifications" element={<AdminStockNotifications />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

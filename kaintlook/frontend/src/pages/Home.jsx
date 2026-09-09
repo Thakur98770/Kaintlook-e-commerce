@@ -1,6 +1,3 @@
-// FILE PATH: kaintlook-auth/frontend/src/pages/Home.jsx
-// Replace the existing file at this path with the contents below.
-
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, Heart, ShoppingBag, Sun, Moon, Phone, User, Package, ChevronRight, Star } from "lucide-react";
@@ -33,12 +30,18 @@ const SHOP_SECTIONS = [
 ];
 
 function ProductCard({ p, theme, accent, onAddToCart, onToggleWishlist, isWishlisted }) {
+  const hasVariants = Array.isArray(p.variants) && p.variants.length > 0;
+  // A variant product's real stock lives inside its sizes, not the legacy
+  // top-level `stock` field (which is unused/irrelevant once variants exist).
+  const totalStock = hasVariants ? p.variants.reduce((sum, v) => sum + v.sizes.reduce((s, x) => s + x.stock, 0), 0) : p.stock;
+  const outOfStock = totalStock === 0;
+
   return (
     <div style={{ background: theme.panel, border: `1px solid ${theme.line}`, borderRadius: 10, overflow: "hidden" }}>
       <Link to={`/products/${p._id}`} style={{ textDecoration: "none", color: "inherit" }}>
         <div style={{ position: "relative" }}>
           <img
-            src={p.images?.[0] || `https://picsum.photos/seed/${p._id}/400/400`}
+            src={p.images?.[0] || p.variants?.[0]?.images?.[0] || `https://picsum.photos/seed/${p._id}/400/400`}
             alt={p.name}
             loading="lazy"
             decoding="async"
@@ -63,13 +66,22 @@ function ProductCard({ p, theme, accent, onAddToCart, onToggleWishlist, isWishli
         </div>
       </Link>
       <div style={{ padding: "0 12px 12px" }}>
-        <button
-          onClick={() => onAddToCart(p._id)}
-          disabled={p.stock === 0}
-          style={{ width: "100%", background: p.stock === 0 ? "#ccc" : theme.text, color: theme.bg, border: "none", borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 600, cursor: p.stock === 0 ? "not-allowed" : "pointer" }}
-        >
-          {p.stock === 0 ? "Out of Stock" : "Add to Cart"}
-        </button>
+        {hasVariants ? (
+          <Link
+            to={`/products/${p._id}`}
+            style={{ display: "block", textAlign: "center", width: "100%", boxSizing: "border-box", background: outOfStock ? "#ccc" : theme.text, color: theme.bg, border: "none", borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 600, textDecoration: "none", pointerEvents: outOfStock ? "none" : "auto" }}
+          >
+            {outOfStock ? "Out of Stock" : "Select Options"}
+          </Link>
+        ) : (
+          <button
+            onClick={() => onAddToCart(p._id)}
+            disabled={outOfStock}
+            style={{ width: "100%", background: outOfStock ? "#ccc" : theme.text, color: theme.bg, border: "none", borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 600, cursor: outOfStock ? "not-allowed" : "pointer" }}
+          >
+            {outOfStock ? "Out of Stock" : "Add to Cart"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -115,7 +127,6 @@ export default function Home() {
     return { ...section, options: options.length ? options : section.options };
   }).filter(Boolean);
 
-  // Load real products from the database
   useEffect(() => {
     getCategories().then((items) => {
       if (items.length > 0) setCategories(items);
@@ -125,7 +136,7 @@ export default function Home() {
   useEffect(() => {
     setLoadingProducts(true);
     Promise.all([
-      searchProducts({ limit: 10 }), // default sort = newest first
+      searchProducts({ limit: 10 }),
       searchProducts({ sort: "rating", limit: 6 }),
     ])
       .then(([newRes, trendRes]) => {
@@ -145,7 +156,6 @@ export default function Home() {
       .finally(() => setLoadingProducts(false));
   }, []);
 
-  // Recently viewed - tracked client-side in localStorage by ProductDetail
   useEffect(() => {
     try {
       const ids = JSON.parse(localStorage.getItem("kaintlook_recently_viewed") || "[]");
@@ -157,7 +167,6 @@ export default function Home() {
     }
   }, []);
 
-  // Debounced live search suggestions
   useEffect(() => {
     if (!query.trim()) {
       setSuggestions([]);
@@ -178,8 +187,6 @@ export default function Home() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Load the logged-in user's wishlist product IDs so hearts render filled
-  // for products already saved (Amazon/Flipkart-style).
   useEffect(() => {
     if (!user) {
       setWishlistIds(new Set());
@@ -266,6 +273,9 @@ export default function Home() {
           .kl-header-actions { gap: 12px !important; }
           .kl-header-label { display: none; }
           .kl-footer-grid { grid-template-columns: 1fr !important; gap: 24px !important; }
+          .kl-hero-img { aspect-ratio: 4 / 3 !important; }
+          .kl-hero-content { padding: 0 20px !important; max-width: 100% !important; }
+          .kl-hero-content h1 { font-size: 22px !important; margin: 8px 0 12px !important; }
         }
       `}</style>
 
@@ -411,9 +421,9 @@ export default function Home() {
 
       <section style={{ maxWidth: 1280, margin: "0 auto", padding: "24px 20px 0" }}>
         <div style={{ position: "relative", borderRadius: 12, overflow: "hidden" }}>
-          <img src="https://picsum.photos/seed/klhero/1280/420" alt="KaintLook seasonal collection" decoding="async" style={{ width: "100%", display: "block", aspectRatio: "3/1", objectFit: "cover" }} />
+          <img src="https://picsum.photos/seed/klhero/1280/420" alt="KaintLook seasonal collection" decoding="async" className="kl-hero-img" style={{ width: "100%", display: "block", aspectRatio: "3/1", objectFit: "cover" }} />
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(0,0,0,.45), transparent 60%)", display: "flex", alignItems: "center" }}>
-            <div style={{ padding: "0 40px", color: "#fff", maxWidth: 420 }}>
+            <div className="kl-hero-content" style={{ padding: "0 40px", color: "#fff", maxWidth: 420 }}>
               <span className="kl-mono" style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: accent }}>New Season</span>
               <h1 className="kl-serif" style={{ fontSize: 34, fontWeight: 700, margin: "10px 0 16px", lineHeight: 1.1 }}>Handstitched, ready to wear</h1>
               <button onClick={() => navigate("/shop")} style={{ background: accent, color: "#fff", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
@@ -509,9 +519,10 @@ export default function Home() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12.5, color: theme.sub }}>
               <span className="kl-navlink">About Us</span>
               <span className="kl-navlink">Contact Us</span>
-              <span className="kl-navlink">Privacy Policy</span>
+              <Link to="/terms" className="kl-navlink" style={{ color: "inherit", textDecoration: "none" }}>Terms &amp; Conditions</Link>
+              <Link to="/privacy-policy" className="kl-navlink" style={{ color: "inherit", textDecoration: "none" }}>Privacy Policy</Link>
               <span className="kl-navlink">Shipping Policy</span>
-              <span className="kl-navlink">Refund Policy</span>
+              <Link to="/refund-policy" className="kl-navlink" style={{ color: "inherit", textDecoration: "none" }}>Refund Policy</Link>
             </div>
           </div>
           <div>

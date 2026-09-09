@@ -1,6 +1,3 @@
-// FILE PATH: kaintlook-auth/frontend/src/pages/account/Profile.jsx
-// Replace the existing file at this path with the contents below.
-
 import React, { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { updateProfileRequest, changePasswordRequest } from "../../api/auth";
@@ -76,13 +73,14 @@ export default function Profile() {
           />
           <input
             type="password"
-            placeholder="New password (min 6 characters)"
+            placeholder="New password"
             value={pwForm.newPassword}
             onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })}
             required
             minLength={6}
             style={inputStyle}
           />
+          <p style={{ fontSize: 11.5, color: "#9a9a9a", margin: "-4px 0 0 2px" }}>Must be at least 6 characters</p>
           <button type="submit" disabled={pwSaving} style={{ ...primaryBtn, alignSelf: "flex-start" }}>
             {pwSaving ? "Updating…" : "Update Password"}
           </button>

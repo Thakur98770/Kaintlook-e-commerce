@@ -1,10 +1,7 @@
-// FILE PATH: kaintlook-auth/frontend/src/pages/Shop.jsx
-// Replace the existing file at this path with the contents below.
-
 import React, { useEffect, useState } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { Star, Heart } from "lucide-react";
-import { searchProducts, getCategories, addToWishlist, removeFromWishlist, getWishlist } from "../api/shop";
+import { searchProducts, getCategories, getProductFilters, addToWishlist, removeFromWishlist, getWishlist } from "../api/shop";
 import { useAuth } from "../context/AuthContext";
 import Seo, { siteName } from "../components/Seo";
 
@@ -29,9 +26,12 @@ export default function Shop() {
   const minPrice = searchParams.get("minPrice") || "";
   const maxPrice = searchParams.get("maxPrice") || "";
   const minRating = searchParams.get("minRating") || "";
+  const color = searchParams.get("color") || "";
+  const size = searchParams.get("size") || "";
 
   const [priceInputs, setPriceInputs] = useState({ minPrice, maxPrice });
   const [wishlistIds, setWishlistIds] = useState(() => new Set());
+  const [availableFilters, setAvailableFilters] = useState({ colors: [], sizes: [] });
 
   useEffect(() => {
     if (!user) {
@@ -63,19 +63,20 @@ export default function Shop() {
 
   useEffect(() => {
     getCategories().then(setCategories).catch(() => {});
+    getProductFilters().then(setAvailableFilters).catch(() => {});
   }, []);
 
   useEffect(() => {
     setLoading(true);
     setLoadError("");
-    searchProducts({ search: q, category, subcategory, tag, sort: sort === "featured" ? undefined : sort, minPrice, maxPrice, minRating, limit: 40 })
+    searchProducts({ search: q, category, subcategory, tag, color, size, sort: sort === "featured" ? undefined : sort, minPrice, maxPrice, minRating, limit: 40 })
       .then((res) => {
         setProducts(res.products || []);
         setTotal(res.total || 0);
       })
       .catch((err) => setLoadError(err.message || "Products could not be loaded"))
       .finally(() => setLoading(false));
-  }, [q, category, subcategory, tag, sort, minPrice, maxPrice, minRating]);
+  }, [q, category, subcategory, tag, color, size, sort, minPrice, maxPrice, minRating]);
 
   const updateParam = (key, value) => {
     const next = new URLSearchParams(searchParams);
@@ -101,7 +102,6 @@ export default function Shop() {
       <p style={{ fontSize: 12.5, color: "#767676", marginBottom: 24 }}>{total} products</p>
 
       <div className="kl-shop-layout" style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 30 }}>
-        {/* Filters sidebar */}
         <aside>
           <div style={{ marginBottom: 26 }}>
             <h3 style={filterTitle}>Category</h3>
@@ -140,7 +140,7 @@ export default function Shop() {
             <button onClick={applyPriceFilter} style={applyBtnStyle}>Apply</button>
           </div>
 
-          <div>
+          <div style={{ marginBottom: 26 }}>
             <h3 style={filterTitle}>Customer Rating</h3>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {[4, 3, 2].map((r) => (
@@ -154,9 +154,49 @@ export default function Shop() {
               </label>
             </div>
           </div>
+
+          {availableFilters.colors.length > 0 && (
+            <div style={{ marginBottom: 26 }}>
+              <h3 style={filterTitle}>Color</h3>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {availableFilters.colors.map((c) => (
+                  <button
+                    key={c.name}
+                    onClick={() => updateParam("color", color === c.name ? "" : c.name)}
+                    title={c.name}
+                    aria-label={c.name}
+                    style={{
+                      width: 26, height: 26, borderRadius: "50%", background: c.code, cursor: "pointer",
+                      border: color === c.name ? `3px solid ${accent}` : "2px solid #E7E5DF",
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {availableFilters.sizes.length > 0 && (
+            <div>
+              <h3 style={filterTitle}>Size</h3>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {availableFilters.sizes.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => updateParam("size", size === s ? "" : s)}
+                    style={{
+                      padding: "5px 10px", borderRadius: 6, fontSize: 12, cursor: "pointer",
+                      background: size === s ? accent : "#fff", color: size === s ? "#fff" : "#1B1B1B",
+                      border: `1px solid ${size === s ? accent : "#E7E5DF"}`,
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </aside>
 
-        {/* Results */}
         <div>
           <div className="kl-shop-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             {status && <span style={{ fontSize: 12.5, color: "#767676" }}>{status}</span>}
@@ -182,7 +222,7 @@ export default function Shop() {
                   <div style={{ border: "1px solid #E7E5DF", borderRadius: 10, overflow: "hidden" }}>
                     <div style={{ position: "relative" }}>
                       <img
-                        src={p.images?.[0] || `https://picsum.photos/seed/${p._id}/300/300`}
+                        src={p.images?.[0] || p.variants?.[0]?.images?.[0] || `https://picsum.photos/seed/${p._id}/300/300`}
                         alt={p.name}
                         loading="lazy"
                         decoding="async"

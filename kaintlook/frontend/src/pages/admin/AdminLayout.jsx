@@ -1,9 +1,6 @@
-// FILE PATH: kaintlook-auth/frontend/src/pages/admin/AdminLayout.jsx
-// Replace the existing file at this path with the contents below.
-
 import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { LayoutDashboard, Package, ShoppingBag, Users, Tag, Mail } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Users, Tag, Mail, BellRing } from "lucide-react";
 
 const accent = "#2575FC";
 
@@ -14,6 +11,7 @@ const LINKS = [
   { to: "/admin/categories", label: "Categories", icon: Tag },
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/notifications", label: "Email Logs", icon: Mail },
+  { to: "/admin/stock-notifications", label: "Back-in-Stock Requests", icon: BellRing },
 ];
 
 export default function AdminLayout() {

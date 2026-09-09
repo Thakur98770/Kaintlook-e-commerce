@@ -1,6 +1,3 @@
-// FILE PATH: kaintlook-auth/frontend/src/pages/admin/Dashboard.jsx
-// Replace the existing file at this path with the contents below.
-
 import React, { useEffect, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { adminGetSummary, adminGetSales, adminGetTopProducts } from "../../api/admin";
@@ -67,7 +64,7 @@ export default function Dashboard() {
         </ResponsiveContainer>
       </div>
 
-      <div style={{ background: "#fff", border: "1px solid #E7E5DF", borderRadius: 10, padding: "20px" }}>
+      <div style={{ background: "#fff", border: "1px solid #E7E5DF", borderRadius: 10, padding: "20px", overflowX: "auto" }}>
         <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Top Products</h2>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>

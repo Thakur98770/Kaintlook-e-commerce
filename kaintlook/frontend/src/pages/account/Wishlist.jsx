@@ -1,6 +1,3 @@
-// FILE PATH: kaintlook-auth/frontend/src/pages/account/Wishlist.jsx
-// Replace the existing file at this path with the contents below.
-
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Trash2 } from "lucide-react";
@@ -47,16 +44,22 @@ export default function Wishlist() {
           {products.map((p) => (
             <div key={p._id} style={{ border: "1px solid #E7E5DF", borderRadius: 10, overflow: "hidden" }}>
               <Link to={`/products/${p._id}`} style={{ textDecoration: "none", color: "inherit" }}>
-                <img src={p.images?.[0] || `https://picsum.photos/seed/${p._id}/300/300`} alt={p.name} style={{ width: "100%", aspectRatio: "1/1", objectFit: "cover" }} />
+                <img src={p.images?.[0] || p.variants?.[0]?.images?.[0] || `https://picsum.photos/seed/${p._id}/300/300`} alt={p.name} style={{ width: "100%", aspectRatio: "1/1", objectFit: "cover" }} />
                 <div style={{ padding: "8px 10px 0" }}>
                   <h3 style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>{p.name}</h3>
                   <span style={{ fontSize: 13, color: accent, fontWeight: 700 }}>₹{p.price}</span>
                 </div>
               </Link>
               <div style={{ display: "flex", gap: 6, padding: 10 }}>
-                <button onClick={() => handleAddToCart(p._id)} style={{ flex: 1, background: "#1B1B1B", color: "#fff", border: "none", borderRadius: 6, padding: "6px 0", fontSize: 11.5, cursor: "pointer" }}>
-                  Add to Cart
-                </button>
+                {Array.isArray(p.variants) && p.variants.length > 0 ? (
+                  <Link to={`/products/${p._id}`} style={{ flex: 1, textAlign: "center", background: "#1B1B1B", color: "#fff", border: "none", borderRadius: 6, padding: "6px 0", fontSize: 11.5, textDecoration: "none" }}>
+                    Select Options
+                  </Link>
+                ) : (
+                  <button onClick={() => handleAddToCart(p._id)} style={{ flex: 1, background: "#1B1B1B", color: "#fff", border: "none", borderRadius: 6, padding: "6px 0", fontSize: 11.5, cursor: "pointer" }}>
+                    Add to Cart
+                  </button>
+                )}
                 <button onClick={() => handleRemove(p._id)} style={{ background: "none", border: "1px solid #E7E5DF", borderRadius: 6, padding: "6px 8px", cursor: "pointer", color: "#B03434" }}>
                   <Trash2 size={13} />
                 </button>

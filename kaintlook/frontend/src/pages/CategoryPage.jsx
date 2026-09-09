@@ -30,7 +30,7 @@ export default function CategoryPage() {
     <nav style={{ fontSize: 13, marginBottom: 18 }}><Link to="/">Home</Link> <span aria-hidden="true">/</span> <span>{category.name}</span></nav>
     <h1 style={headingStyle}>{category.name}</h1>
     <p style={{ color: "#767676", lineHeight: 1.6 }}>{description}</p>
-    {products.length === 0 ? <p style={{ color: "#767676" }}>No products in this category yet.</p> : <div style={gridStyle}>{products.map((product) => <Link key={product._id} to={`/products/${product._id}`} style={cardStyle}><img src={product.images?.[0] || `https://picsum.photos/seed/${product._id}/300/300`} alt={product.name} loading="lazy" decoding="async" style={{ width: "100%", aspectRatio: "1", objectFit: "cover" }} /><strong>{product.name}</strong><span>₹{product.price}</span></Link>)}</div>}
+    {products.length === 0 ? <p style={{ color: "#767676" }}>No products in this category yet.</p> : <div style={gridStyle}>{products.map((product) => <Link key={product._id} to={`/products/${product._id}`} style={cardStyle}><img src={product.images?.[0] || product.variants?.[0]?.images?.[0] || `https://picsum.photos/seed/${product._id}/300/300`} alt={product.name} loading="lazy" decoding="async" style={{ width: "100%", aspectRatio: "1", objectFit: "cover" }} /><strong>{product.name}</strong><span>₹{product.price}</span></Link>)}</div>}
   </main>;
 }
 

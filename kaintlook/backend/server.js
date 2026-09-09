@@ -20,6 +20,7 @@ const analyticsRoutes = require("./routes/analyticsRoutes");
 const myReviewsRoutes = require("./routes/myReviewsRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const stockNotificationRoutes = require("./routes/stockNotificationRoutes");
 const Product = require("./models/Product");
 const Category = require("./models/Category");
 
@@ -72,6 +73,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/stock-notifications", stockNotificationRoutes);
 
 app.get("/", (req, res) => res.send("KaintLook API running"));
 app.get("/api/health", (req, res) => {

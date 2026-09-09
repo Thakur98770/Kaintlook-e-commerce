@@ -6,6 +6,12 @@ const orderItemSchema = new mongoose.Schema(
     name: { type: String, required: true }, // snapshot in case product changes later
     price: { type: Number, required: true }, // price at time of order
     quantity: { type: Number, required: true, min: 1 },
+    // Variant snapshot — "" fields mean this was a legacy/non-variant product.
+    variantColorName: { type: String, default: "" },
+    variantColorCode: { type: String, default: "" },
+    size: { type: String, default: "" },
+    image: { type: String, default: "" }, // the exact (color-specific) image shown at purchase time
+    sku: { type: String, default: "" },
   },
   { _id: false }
 );
