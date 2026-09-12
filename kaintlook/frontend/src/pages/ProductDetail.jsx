@@ -220,7 +220,6 @@ export default function ProductDetail() {
         @media (max-width: 700px) { .kl-product-layout { grid-template-columns: 1fr !important; gap: 24px !important; } .kl-product-actions { flex-wrap: wrap; } }
         .kl-color-swatch { transition: transform .15s ease, box-shadow .15s ease; }
         .kl-color-swatch:hover { transform: scale(1.08); }
-        .kl-size-btn:disabled { text-decoration: line-through; }
       `}</style>
       <div className="kl-product-layout" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 36 }}>
         <div>
@@ -316,8 +315,7 @@ export default function ProductDetail() {
                     <button
                       key={s.size}
                       className="kl-size-btn"
-                      onClick={() => !outOfStock && handleSelectSize(s.size)}
-                      disabled={outOfStock}
+                      onClick={() => handleSelectSize(s.size)}
                       title={outOfStock ? `${s.size} — Out of stock` : s.size}
                       style={{
                         minWidth: 44,
@@ -325,10 +323,11 @@ export default function ProductDetail() {
                         borderRadius: 6,
                         fontSize: 13,
                         fontWeight: 600,
-                        cursor: outOfStock ? "not-allowed" : "pointer",
+                        cursor: "pointer",
                         background: isSelected ? accent : "#fff",
                         color: outOfStock ? "#B8B4AA" : isSelected ? "#fff" : "#1B1B1B",
                         border: `1px solid ${isSelected ? accent : "#E7E5DF"}`,
+                        textDecoration: outOfStock ? "line-through" : "none",
                       }}
                     >
                       {s.size}
