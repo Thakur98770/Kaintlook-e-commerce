@@ -73,7 +73,8 @@ export default function Checkout() {
     }
   };
 
-  const handleSaveAddress = async () => {
+  const handleSaveAddress = async (e) => {
+    e.preventDefault();
     try {
       const saved = await addAddress(newAddress);
       setAddresses((prev) => [saved, ...prev]);
@@ -145,17 +146,48 @@ export default function Checkout() {
         {!showNewAddress ? (
           <button onClick={() => setShowNewAddress(true)} style={linkBtnStyle}>+ Add new address</button>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12, maxWidth: 400 }}>
-            {["fullName", "line1", "line2", "landmark", "city", "state", "pincode", "phone"].map((field) => (
-              <input
-                key={field}
-                placeholder={field}
-                value={newAddress[field]}
-                onChange={(e) => setNewAddress({ ...newAddress, [field]: e.target.value })}
-                style={inputStyle}
-              />
-            ))}
-            <button onClick={handleSaveAddress} style={{ ...addBtnStyle, alignSelf: "flex-start" }}>Save Address</button>
+          <div className="kl-address-form" style={{ border: "1px solid #E7E5DF", borderRadius: 10, padding: 20, marginTop: 12, maxWidth: 480 }}>
+            <style>{`
+              @media (max-width: 480px) { .kl-address-row3 { grid-template-columns: 1fr !important; } }
+            `}</style>
+            <form onSubmit={handleSaveAddress} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <FormField label="Full Name" required>
+                <input placeholder="e.g. Abhishek Thakur" value={newAddress.fullName} onChange={(e) => setNewAddress({ ...newAddress, fullName: e.target.value })} required style={inputStyle} />
+              </FormField>
+
+              <FormField label="Phone Number" required>
+                <input type="tel" placeholder="10-digit mobile number" value={newAddress.phone} onChange={(e) => setNewAddress({ ...newAddress, phone: e.target.value })} required style={inputStyle} />
+              </FormField>
+
+              <FormField label="Address (House No, Building, Street, Area)" required>
+                <input placeholder="e.g. House No. 123, Model Town" value={newAddress.line1} onChange={(e) => setNewAddress({ ...newAddress, line1: e.target.value })} required style={inputStyle} />
+              </FormField>
+
+              <FormField label="Apartment, Suite, etc.">
+                <input placeholder="(optional)" value={newAddress.line2} onChange={(e) => setNewAddress({ ...newAddress, line2: e.target.value })} style={inputStyle} />
+              </FormField>
+
+              <FormField label="Landmark">
+                <input placeholder="e.g. Near City Hospital (optional)" value={newAddress.landmark} onChange={(e) => setNewAddress({ ...newAddress, landmark: e.target.value })} style={inputStyle} />
+              </FormField>
+
+              <div className="kl-address-row3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <FormField label="City" required>
+                  <input placeholder="e.g. Ludhiana" value={newAddress.city} onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })} required style={inputStyle} />
+                </FormField>
+                <FormField label="State" required>
+                  <input placeholder="e.g. Punjab" value={newAddress.state} onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })} required style={inputStyle} />
+                </FormField>
+                <FormField label="Pincode" required>
+                  <input placeholder="e.g. 141001" value={newAddress.pincode} onChange={(e) => setNewAddress({ ...newAddress, pincode: e.target.value })} required style={inputStyle} />
+                </FormField>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                <button type="submit" style={addBtnStyle}>Save Address</button>
+                <button type="button" onClick={() => setShowNewAddress(false)} style={linkBtnStyle}>Cancel</button>
+              </div>
+            </form>
           </div>
         )}
       </section>
@@ -199,6 +231,20 @@ export default function Checkout() {
   );
 }
 
+// A labeled field wrapper — label on top, red asterisk for required fields,
+// matching the familiar Amazon/Flipkart-style checkout form pattern.
+function FormField({ label, required, children }) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+      <span style={{ fontSize: 12, fontWeight: 600, color: "#444" }}>
+        {label}
+        {required && <span style={{ color: "#B03434" }}> *</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
 const sectionTitle = { fontSize: 15, fontWeight: 700, marginBottom: 12 };
 const addressCard = (active) => ({
   display: "flex", alignItems: "center", border: `1px solid ${active ? accent : "#E7E5DF"}`,
@@ -208,7 +254,7 @@ const paymentCard = (active) => ({
   display: "flex", alignItems: "center", border: `1px solid ${active ? accent : "#E7E5DF"}`,
   borderRadius: 8, padding: "12px 14px", marginBottom: 8, cursor: "pointer",
 });
-const inputStyle = { padding: "10px 12px", border: "1px solid #E7E5DF", borderRadius: 6, fontSize: 13 };
+const inputStyle = { padding: "10px 12px", border: "1px solid #E7E5DF", borderRadius: 6, fontSize: 13, width: "100%", boxSizing: "border-box" };
 const addBtnStyle = { background: accent, color: "#fff", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 13.5, fontWeight: 600, cursor: "pointer" };
 const linkBtnStyle = { background: "none", border: "1px solid #E7E5DF", borderRadius: 6, padding: "9px 16px", fontSize: 13, cursor: "pointer" };
 const rowStyle = { display: "flex", justifyContent: "space-between", fontSize: 13.5, padding: "4px 0" };
