@@ -14,6 +14,7 @@ export default function Checkout() {
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [showNewAddress, setShowNewAddress] = useState(false);
   const [newAddress, setNewAddress] = useState({ fullName: "", line1: "", line2: "", landmark: "", city: "", state: "", pincode: "", phone: "", addressType: "home" });
+  const [pincodeStatus, setPincodeStatus] = useState(""); // "" | "loading" | "found" | "not-found"
   const [couponCode, setCouponCode] = useState("");
   const [discount, setDiscount] = useState(0);
   const [couponMsg, setCouponMsg] = useState("");
@@ -70,6 +71,44 @@ export default function Checkout() {
     } catch (err) {
       setDiscount(0);
       setCouponMsg(err.message);
+    }
+  };
+
+  // Looks up City/State from a 6-digit PIN code via India Post's public API
+  // (no key needed) — same "type PIN, city/state auto-fill" pattern used on
+  // Amazon/Flipkart. If the lookup fails or the PIN isn't found, the fields
+  // are simply left as-is so the person can type them in manually.
+  const pincodeLookupRef = React.useRef("");
+  const handlePincodeChange = async (rawValue) => {
+    const value = rawValue.replace(/\D/g, "").slice(0, 6);
+    setNewAddress((prev) => ({ ...prev, pincode: value }));
+
+    if (value.length !== 6) {
+      setPincodeStatus("");
+      return;
+    }
+
+    pincodeLookupRef.current = value;
+    setPincodeStatus("loading");
+    try {
+      const res = await fetch(`https://api.postalpincode.in/pincode/${value}`);
+      const data = await res.json();
+      // Ignore this result if the person kept typing and it's no longer current.
+      if (pincodeLookupRef.current !== value) return;
+
+      const postOffice = data?.[0]?.PostOffice?.[0];
+      if (data?.[0]?.Status === "Success" && postOffice) {
+        setNewAddress((prev) => ({
+          ...prev,
+          city: postOffice.District || prev.city,
+          state: postOffice.State || prev.state,
+        }));
+        setPincodeStatus("found");
+      } else {
+        setPincodeStatus("not-found");
+      }
+    } catch {
+      if (pincodeLookupRef.current === value) setPincodeStatus("not-found");
     }
   };
 
@@ -146,40 +185,52 @@ export default function Checkout() {
         {!showNewAddress ? (
           <button onClick={() => setShowNewAddress(true)} style={linkBtnStyle}>+ Add new address</button>
         ) : (
-          <div className="kl-address-form" style={{ border: "1px solid #E7E5DF", borderRadius: 10, padding: 20, marginTop: 12, maxWidth: 480 }}>
+          <div className="kl-address-form" style={{ border: "1px solid #E7E5DF", borderRadius: 10, padding: 20, marginTop: 12 }}>
             <style>{`
-              @media (max-width: 480px) { .kl-address-row3 { grid-template-columns: 1fr !important; } }
+              @media (max-width: 480px) { .kl-address-row2, .kl-address-row3 { grid-template-columns: 1fr !important; } }
             `}</style>
             <form onSubmit={handleSaveAddress} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <FormField label="Full Name" required>
-                <input placeholder="e.g. Abhishek Thakur" value={newAddress.fullName} onChange={(e) => setNewAddress({ ...newAddress, fullName: e.target.value })} required style={inputStyle} />
-              </FormField>
-
-              <FormField label="Phone Number" required>
-                <input type="tel" placeholder="10-digit mobile number" value={newAddress.phone} onChange={(e) => setNewAddress({ ...newAddress, phone: e.target.value })} required style={inputStyle} />
-              </FormField>
+              <div className="kl-address-row2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <FormField label="Full Name" required>
+                  <input placeholder="e.g. Abhishek Thakur" value={newAddress.fullName} onChange={(e) => setNewAddress({ ...newAddress, fullName: e.target.value })} required style={inputStyle} />
+                </FormField>
+                <FormField label="Phone Number" required>
+                  <input type="tel" placeholder="10-digit mobile number" value={newAddress.phone} onChange={(e) => setNewAddress({ ...newAddress, phone: e.target.value })} required style={inputStyle} />
+                </FormField>
+              </div>
 
               <FormField label="Address (House No, Building, Street, Area)" required>
                 <input placeholder="e.g. House No. 123, Model Town" value={newAddress.line1} onChange={(e) => setNewAddress({ ...newAddress, line1: e.target.value })} required style={inputStyle} />
               </FormField>
 
-              <FormField label="Apartment, Suite, etc.">
-                <input placeholder="(optional)" value={newAddress.line2} onChange={(e) => setNewAddress({ ...newAddress, line2: e.target.value })} style={inputStyle} />
-              </FormField>
-
-              <FormField label="Landmark">
-                <input placeholder="e.g. Near City Hospital (optional)" value={newAddress.landmark} onChange={(e) => setNewAddress({ ...newAddress, landmark: e.target.value })} style={inputStyle} />
-              </FormField>
+              <div className="kl-address-row2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <FormField label="Apartment, Suite, etc.">
+                  <input placeholder="(optional)" value={newAddress.line2} onChange={(e) => setNewAddress({ ...newAddress, line2: e.target.value })} style={inputStyle} />
+                </FormField>
+                <FormField label="Landmark">
+                  <input placeholder="e.g. Near City Hospital (optional)" value={newAddress.landmark} onChange={(e) => setNewAddress({ ...newAddress, landmark: e.target.value })} style={inputStyle} />
+                </FormField>
+              </div>
 
               <div className="kl-address-row3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <FormField label="Pincode" required>
+                  <input
+                    placeholder="e.g. 141001"
+                    value={newAddress.pincode}
+                    onChange={(e) => handlePincodeChange(e.target.value)}
+                    maxLength={6}
+                    inputMode="numeric"
+                    required
+                    style={inputStyle}
+                  />
+                  {pincodeStatus === "loading" && <span style={hintTextStyle}>Looking up city/state…</span>}
+                  {pincodeStatus === "not-found" && <span style={{ ...hintTextStyle, color: "#B03434" }}>Couldn't find this pincode — enter city/state manually</span>}
+                </FormField>
                 <FormField label="City" required>
                   <input placeholder="e.g. Ludhiana" value={newAddress.city} onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })} required style={inputStyle} />
                 </FormField>
                 <FormField label="State" required>
                   <input placeholder="e.g. Punjab" value={newAddress.state} onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })} required style={inputStyle} />
-                </FormField>
-                <FormField label="Pincode" required>
-                  <input placeholder="e.g. 141001" value={newAddress.pincode} onChange={(e) => setNewAddress({ ...newAddress, pincode: e.target.value })} required style={inputStyle} />
                 </FormField>
               </div>
 
@@ -255,6 +306,7 @@ const paymentCard = (active) => ({
   borderRadius: 8, padding: "12px 14px", marginBottom: 8, cursor: "pointer",
 });
 const inputStyle = { padding: "10px 12px", border: "1px solid #E7E5DF", borderRadius: 6, fontSize: 13, width: "100%", boxSizing: "border-box" };
+const hintTextStyle = { fontSize: 11, color: "#767676", marginTop: 2 };
 const addBtnStyle = { background: accent, color: "#fff", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 13.5, fontWeight: 600, cursor: "pointer" };
 const linkBtnStyle = { background: "none", border: "1px solid #E7E5DF", borderRadius: 6, padding: "9px 16px", fontSize: 13, cursor: "pointer" };
 const rowStyle = { display: "flex", justifyContent: "space-between", fontSize: 13.5, padding: "4px 0" };

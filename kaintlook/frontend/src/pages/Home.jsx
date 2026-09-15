@@ -28,6 +28,15 @@ const SHOP_SECTIONS = [
   { name: "Women", seed: "women-fashion", options: ["Tops", "Dresses", "Kurtas", "Jeans", "Footwear"] },
   { name: "Children", seed: "children-fashion", options: ["T-Shirts", "Dresses", "Jeans", "Sets", "Footwear"] },
 ];
+// Issues 3 & 10 — real, curated category imagery. picsum.photos seeds return an
+// arbitrary photo from its library with no guarantee it matches the category
+// label; swap these for actual assets (e.g. /assets/categories/women.jpg) as
+// soon as real photography is available.
+const CATEGORY_IMAGES = {
+  Men: "/assets/categories/men.jpg",
+  Women: "/assets/categories/women.jpg",
+  Children: "/assets/categories/children.jpg",
+};
 
 function ProductCard({ p, theme, accent, onAddToCart, onToggleWishlist, isWishlisted }) {
   const hasVariants = Array.isArray(p.variants) && p.variants.length > 0;
@@ -35,18 +44,37 @@ function ProductCard({ p, theme, accent, onAddToCart, onToggleWishlist, isWishli
   // top-level `stock` field (which is unused/irrelevant once variants exist).
   const totalStock = hasVariants ? p.variants.reduce((sum, v) => sum + v.sizes.reduce((s, x) => s + x.stock, 0), 0) : p.stock;
   const outOfStock = totalStock === 0;
+  // Issue 7 — only treat a rating as real if there's at least one review behind it.
+  const hasRating = typeof p.rating === "number" && p.rating > 0 && (p.reviewCount ?? 1) > 0;
+  // Issues 4 & 13 — text-on-color stand-in images (placehold.co, or no image at all)
+  // should render as an intentional "coming soon" tile, not a raw dev placeholder
+  // or a random stock photo that implies a real product photo exists.
+  const rawImage = p.images?.[0] || p.variants?.[0]?.images?.[0] || "";
+  const isPlaceholderImage = !rawImage || rawImage.includes("placehold.co");
 
   return (
-    <div style={{ background: theme.panel, border: `1px solid ${theme.line}`, borderRadius: 10, overflow: "hidden" }}>
+    // Issue 14 — flex column so the CTA area can be pinned to the bottom
+    // regardless of how many lines the title/category above it wrap to.
+    <div style={{ background: theme.panel, border: `1px solid ${theme.line}`, borderRadius: 10, overflow: "hidden", display: "flex", flexDirection: "column", height: "100%" }}>
       <Link to={`/products/${p._id}`} style={{ textDecoration: "none", color: "inherit" }}>
         <div style={{ position: "relative" }}>
-          <img
-            src={p.images?.[0] || p.variants?.[0]?.images?.[0] || `https://picsum.photos/seed/${p._id}/400/400`}
-            alt={p.name}
-            loading="lazy"
-            decoding="async"
-            style={{ width: "100%", aspectRatio: "1/1", objectFit: "cover", display: "block" }}
-          />
+          {isPlaceholderImage ? (
+            <div
+              role="img"
+              aria-label={`${p.name} — product photo coming soon`}
+              style={{ width: "100%", aspectRatio: "1/1", display: "flex", alignItems: "center", justifyContent: "center", background: theme.line, color: theme.sub, fontSize: "var(--fs-xs)", textAlign: "center", padding: 12 }}
+            >
+              Photo coming soon
+            </div>
+          ) : (
+            <img
+              src={rawImage}
+              alt={p.name}
+              loading="lazy"
+              decoding="async"
+              style={{ width: "100%", aspectRatio: "1/1", objectFit: "cover", display: "block" }}
+            />
+          )}
           <button
             onClick={(e) => { e.preventDefault(); onToggleWishlist(p._id); }}
             aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
@@ -56,28 +84,33 @@ function ProductCard({ p, theme, accent, onAddToCart, onToggleWishlist, isWishli
           </button>
         </div>
         <div style={{ padding: "10px 12px 6px" }}>
-          <span className="kl-mono" style={{ fontSize: 10, color: theme.sub }}>{p.category}</span>
-          <h3 style={{ fontSize: 13.5, fontWeight: 600, margin: "3px 0 6px", color: theme.text, lineHeight: 1.3 }}>{p.name}</h3>
-          <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
-            <Star size={11} fill={accent} color={accent} />
-            <span style={{ fontSize: 11, color: theme.sub }}>{p.rating?.toFixed(1) || "0.0"}</span>
-          </div>
-          <span className="kl-mono" style={{ fontSize: 15, color: accent, fontWeight: 600 }}>₹{p.price}</span>
+          <span className="kl-mono" style={{ fontSize: "var(--fs-2xs)", color: theme.sub }}>{p.category}</span>
+          <h3 style={{ fontSize: "var(--fs-md)", fontWeight: 600, margin: "3px 0 6px", color: theme.text, lineHeight: 1.3 }}>{p.name}</h3>
+          {hasRating && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
+              <Star size={11} fill={accent} color={accent} />
+              <span style={{ fontSize: "var(--fs-xs)", color: theme.sub }}>{p.rating.toFixed(1)}</span>
+            </div>
+          )}
+          <span className="kl-mono" style={{ fontSize: "var(--fs-lg)", color: accent, fontWeight: 600 }}>₹{p.price}</span>
         </div>
       </Link>
-      <div style={{ padding: "0 12px 12px" }}>
+      {/* Issue 14 — marginTop: auto pins this row to the bottom of the flex column */}
+      <div style={{ padding: "0 12px 12px", marginTop: "auto" }}>
         {hasVariants ? (
           <Link
             to={`/products/${p._id}`}
-            style={{ display: "block", textAlign: "center", width: "100%", boxSizing: "border-box", background: outOfStock ? "#ccc" : theme.text, color: theme.bg, border: "none", borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 600, textDecoration: "none", pointerEvents: outOfStock ? "none" : "auto" }}
+            className="kl-btn kl-btn-primary"
+            style={{ background: outOfStock ? "#ccc" : theme.text, pointerEvents: outOfStock ? "none" : "auto" }}
           >
-            {outOfStock ? "Out of Stock" : "Select Options"}
+            {outOfStock ? "Out of Stock" : <>Select Options <ChevronRight size={12} style={{ verticalAlign: "-2px", marginLeft: 2 }} /></>}
           </Link>
         ) : (
           <button
             onClick={() => onAddToCart(p._id)}
             disabled={outOfStock}
-            style={{ width: "100%", background: outOfStock ? "#ccc" : theme.text, color: theme.bg, border: "none", borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 600, cursor: outOfStock ? "not-allowed" : "pointer" }}
+            className="kl-btn kl-btn-primary"
+            style={{ background: outOfStock ? "#ccc" : theme.text, border: "none" }}
           >
             {outOfStock ? "Out of Stock" : "Add to Cart"}
           </button>
@@ -257,6 +290,16 @@ export default function Home() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
         * { box-sizing: border-box; }
+        :root {
+          /* Issue 1 — shared type scale (8 steps instead of 11+ one-off values) */
+          --fs-2xl: 28px; /* hero heading */
+          --fs-xl: 20px;  /* section headings */
+          --fs-lg: 15px;  /* prices / emphasis */
+          --fs-md: 13.5px;/* body / product titles */
+          --fs-sm: 12.5px;/* secondary text, nav links */
+          --fs-xs: 11px;  /* meta, pills, ratings */
+          --fs-2xs: 10px; /* eyebrow / mono labels */
+        }
         .kl-serif { font-family: 'Fraunces', serif; }
         .kl-mono { font-family: 'JetBrains Mono', monospace; }
         .kl-navlink { transition: color .15s ease; cursor: pointer; }
@@ -265,6 +308,17 @@ export default function Home() {
         .kl-icon-btn:hover { opacity: .7; }
         .kl-cat-item { transition: transform .2s ease; cursor: pointer; }
         .kl-cat-item:hover { transform: translateY(-3px); }
+
+        /* Issue 2 — shared button system (collapses 6 ad-hoc styles to 3 variants) */
+        .kl-btn { font-family: inherit; font-weight: 600; border-radius: 6px; cursor: pointer; transition: opacity .15s ease; }
+        .kl-btn:disabled { cursor: not-allowed; opacity: .6; }
+        .kl-btn-primary { background: ${theme.text}; color: ${theme.bg}; border: none; padding: 7px 0; font-size: var(--fs-xs); width: 100%; display: block; text-align: center; text-decoration: none; }
+        .kl-btn-accent { background: ${accent}; color: #fff; border: none; padding: 10px 20px; font-size: var(--fs-sm); }
+        .kl-btn-pill { border: 1px solid ${theme.line}; border-radius: 999px; background: ${theme.bg}; color: ${theme.text}; padding: 7px 12px; font-size: var(--fs-xs); font-weight: 500; min-height: 32px; }
+        .kl-btn-primary:hover, .kl-btn-accent:hover { opacity: .88; }
+        /* Issues 8 & 9 — one shared vertical rhythm for every footer column row */
+        .kl-footer-li { line-height: 1.4; margin-bottom: 8px; }
+        .kl-footer-li:last-child { margin-bottom: 0; }
         @media (max-width: 640px) { .kl-home-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; } .kl-home-product-grid h3 { font-size: 12px !important; } .kl-home-product-grid > div > div:last-child { padding-left: 8px !important; padding-right: 8px !important; } }
         input:focus, button:focus-visible { outline: 2px solid ${accent}; outline-offset: 2px; }
         @media (max-width: 640px) {
@@ -425,8 +479,8 @@ export default function Home() {
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(0,0,0,.45), transparent 60%)", display: "flex", alignItems: "center" }}>
             <div className="kl-hero-content" style={{ padding: "0 40px", color: "#fff", maxWidth: 420 }}>
               <span className="kl-mono" style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: accent }}>New Season</span>
-              <h1 className="kl-serif" style={{ fontSize: 34, fontWeight: 700, margin: "10px 0 16px", lineHeight: 1.1 }}>Handstitched, ready to wear</h1>
-              <button onClick={() => navigate("/shop")} style={{ background: accent, color: "#fff", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              <h1 className="kl-serif" style={{ fontSize: "var(--fs-2xl)", fontWeight: 700, margin: "10px 0 16px", lineHeight: 1.1 }}>Handstitched, ready to wear</h1>
+              <button onClick={() => navigate("/shop")} className="kl-btn kl-btn-accent">
                 Shop Now
               </button>
             </div>
@@ -435,18 +489,25 @@ export default function Home() {
       </section>
 
       <section style={{ maxWidth: 1280, margin: "0 auto", padding: "36px 20px 10px" }}>
-        <h2 className="kl-serif" style={{ fontSize: 20, fontWeight: 700, marginBottom: 18 }}>Shop by Category</h2>
+        <h2 className="kl-serif" style={{ fontSize: "var(--fs-xl)", fontWeight: 700, marginBottom: 18 }}>Shop by Category</h2>
         {categorySections.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
           {categorySections.map((section) => (
             <div key={section.name} style={{ border: `1px solid ${theme.line}`, borderRadius: 10, overflow: "hidden", background: theme.panel }}>
               <button onClick={() => navigate(`/shop?category=${encodeURIComponent(section.name)}`)} style={{ position: "relative", display: "block", width: "100%", padding: 0, border: "none", background: "none", cursor: "pointer", textAlign: "left" }}>
-                <img src={`https://picsum.photos/seed/${section.seed}/500/220`} alt={section.name} loading="lazy" decoding="async" style={{ width: "100%", aspectRatio: "2.25/1", objectFit: "cover", display: "block" }} />
+                {/* Issues 3 & 10 — curated, category-accurate image instead of a random picsum photo keyed off an arbitrary seed string */}
+                <img src={CATEGORY_IMAGES[section.name] || `https://picsum.photos/seed/${section.seed}/500/220`} alt={section.name} loading="lazy" decoding="async" style={{ width: "100%", aspectRatio: "2.25/1", objectFit: "cover", display: "block" }} />
+                {/* Issue 11 — gradient scrim guarantees contrast for the label regardless of what the underlying photo looks like */}
+                <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,.6) 100%)" }} />
                 <span className="kl-serif" style={{ position: "absolute", left: 16, bottom: 12, color: "#fff", fontSize: 22, textShadow: "0 1px 5px rgba(0,0,0,.45)" }}>{section.name}</span>
               </button>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "12px 14px 14px" }}>
-                {section.options.map((option) => (
-                  <button key={option} onClick={() => navigate(`/shop?category=${encodeURIComponent(section.name)}&subcategory=${encodeURIComponent(option)}`)} style={{ border: `1px solid ${theme.line}`, borderRadius: 999, background: theme.bg, color: theme.text, padding: "5px 9px", fontSize: 11.5, cursor: "pointer" }}>{option}</button>
-                ))}
+              <div style={{ padding: "12px 14px 14px" }}>
+                {/* Issue 6 & 12 — label + larger, higher-contrast pills so this reads as navigation, not a leftover tag row */}
+                <span className="kl-mono" style={{ fontSize: "var(--fs-2xs)", color: theme.sub, textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 8 }}>Shop by type</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {section.options.map((option) => (
+                    <button key={option} className="kl-btn kl-btn-pill" onClick={() => navigate(`/shop?category=${encodeURIComponent(section.name)}&subcategory=${encodeURIComponent(option)}`)}>{option}</button>
+                  ))}
+                </div>
               </div>
             </div>
           ))}
@@ -455,7 +516,7 @@ export default function Home() {
 
       <section style={{ maxWidth: 1280, margin: "0 auto", padding: "36px 20px 10px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-          <h2 className="kl-serif" style={{ fontSize: 20, fontWeight: 700 }}>New Arrival</h2>
+          <h2 className="kl-serif" style={{ fontSize: "var(--fs-xl)", fontWeight: 700 }}>New Arrival</h2>
           <span className="kl-navlink" onClick={() => navigate("/shop")} style={{ fontSize: 12.5, color: theme.sub, display: "flex", alignItems: "center", gap: 2 }}>
             View all <ChevronRight size={14} />
           </span>
@@ -477,7 +538,7 @@ export default function Home() {
 
       <section style={{ maxWidth: 1280, margin: "0 auto", padding: "36px 20px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-          <h2 className="kl-serif" style={{ fontSize: 20, fontWeight: 700 }}>Trending Products</h2>
+          <h2 className="kl-serif" style={{ fontSize: "var(--fs-xl)", fontWeight: 700 }}>Trending Products</h2>
           <span className="kl-navlink" onClick={() => navigate("/shop")} style={{ fontSize: 12.5, color: theme.sub, display: "flex", alignItems: "center", gap: 2 }}>
             View all <ChevronRight size={14} />
           </span>
@@ -497,7 +558,7 @@ export default function Home() {
 
       {recentlyViewed.length > 0 && (
         <section style={{ maxWidth: 1280, margin: "0 auto", padding: "0 20px 60px" }}>
-          <h2 className="kl-serif" style={{ fontSize: 20, fontWeight: 700, marginBottom: 18 }}>Recently Viewed</h2>
+          <h2 className="kl-serif" style={{ fontSize: "var(--fs-xl)", fontWeight: 700, marginBottom: 18 }}>Recently Viewed</h2>
           <div className="kl-home-product-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 16 }}>
             {recentlyViewed.map((p) => (
               <ProductCard key={p._id} p={p} theme={theme} accent={accent} onAddToCart={handleAddToCart} onToggleWishlist={handleToggleWishlist} isWishlisted={wishlistIds.has(p._id)} />
@@ -509,29 +570,36 @@ export default function Home() {
       <footer style={{ borderTop: `1px solid ${theme.line}`, background: dark ? theme.panel : "#FAF9F6" }}>
         <div className="kl-footer-grid" style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 20px", display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 30 }}>
           <div>
-            <span className="kl-serif" style={{ fontSize: 20, fontWeight: 700 }}>Kaint<span style={{ color: accent }}>Look</span></span>
+            <span className="kl-serif" style={{ fontSize: "var(--fs-xl)", fontWeight: 700 }}>Kaint<span style={{ color: accent }}>Look</span></span>
             <p style={{ fontSize: 12.5, color: theme.sub, marginTop: 10, maxWidth: 260, lineHeight: 1.6 }}>
               Handstitched fashion, shipped from Ludhiana, Punjab.
             </p>
           </div>
           <div>
             <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Useful Links</h4>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12.5, color: theme.sub }}>
-              <span className="kl-navlink">About Us</span>
-              <span className="kl-navlink">Contact Us</span>
-              <Link to="/terms" className="kl-navlink" style={{ color: "inherit", textDecoration: "none" }}>Terms &amp; Conditions</Link>
-              <Link to="/privacy-policy" className="kl-navlink" style={{ color: "inherit", textDecoration: "none" }}>Privacy Policy</Link>
-              <span className="kl-navlink">Shipping Policy</span>
-              <Link to="/refund-policy" className="kl-navlink" style={{ color: "inherit", textDecoration: "none" }}>Refund Policy</Link>
-            </div>
+            {/* Issue 8 — a single <ul> with one line-height/margin rule on every <li>
+                (rather than a flex `gap` mixing <span> and <Link>/<a> children,
+                whose default box models don't stack identically) keeps the
+                vertical rhythm uniform end to end. */}
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, fontSize: 12.5, color: theme.sub }}>
+              <li className="kl-footer-li"><span className="kl-navlink">About Us</span></li>
+              <li className="kl-footer-li"><span className="kl-navlink">Contact Us</span></li>
+              <li className="kl-footer-li"><Link to="/terms" className="kl-navlink" style={{ color: "inherit", textDecoration: "none" }}>Terms &amp; Conditions</Link></li>
+              <li className="kl-footer-li"><Link to="/privacy-policy" className="kl-navlink" style={{ color: "inherit", textDecoration: "none" }}>Privacy Policy</Link></li>
+              <li className="kl-footer-li"><span className="kl-navlink">Shipping Policy</span></li>
+              <li className="kl-footer-li"><Link to="/refund-policy" className="kl-navlink" style={{ color: "inherit", textDecoration: "none" }}>Refund Policy</Link></li>
+            </ul>
           </div>
           <div>
             <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Contact Info</h4>
-            <p style={{ fontSize: 12.5, color: theme.sub, lineHeight: 1.7 }}>
-              Ludhiana, Punjab — India<br />
-              hello@kaintlook.com<br />
-              +91 00000 00000
-            </p>
+            {/* Issue 9 — same <ul>/li.kl-footer-li rhythm as "Useful Links" instead of
+                a <p> with <br/> line breaks and its own line-height, so both
+                footer columns line up row for row. */}
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, fontSize: 12.5, color: theme.sub }}>
+              <li className="kl-footer-li">Ludhiana, Punjab — India</li>
+              <li className="kl-footer-li">hello@kaintlook.com</li>
+              <li className="kl-footer-li">+91 00000 00000</li>
+            </ul>
           </div>
         </div>
         <div style={{ borderTop: `1px solid ${theme.line}`, textAlign: "center", padding: "16px 20px", fontSize: 11.5, color: theme.sub }}>
